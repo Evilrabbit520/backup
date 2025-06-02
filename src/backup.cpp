@@ -2,13 +2,62 @@
 #include <filesystem>
 #include <fstream>
 #include <chrono>
-#include <nlohmann/json.hpp>
 #include <vector>
 #include <algorithm>
 #include <ctime>
 #include <iomanip>
+#include <unordered_map>
+
+#include "../include/nlohmann/json.hpp"
 
 using json = nlohmann::json;
+
+/**
+ * @brief simple parameter parser
+ *
+ * @param argc
+ * @param argv
+ * @return std::unordered_map<std::string, std::string>
+ */
+std::unordered_map<std::string, std::string> parse_args(int argc, char *argv[])
+{
+    std::unordered_map<std::string, std::string> args;
+    for (int i = 1; i < argc; ++i)
+    {
+        std::string arg = argv[i];
+        if (arg == "-h" || arg == "--help")
+        {
+            std::cout << "Help:\n"
+                      << "  backup <source_directory> <destination_directory>\n"
+                      << "  backup [--version | -v]\n"
+                      << "  \n"
+                      << "  Usage:\n"
+                      << "  backup <source_directory> <destination_directory> The directory to be backed up is <source_directory>, and the files are backed up to <destination_directory>\n"
+                      << "  \n"
+                      << "  All commands:\n"
+                      << "  --version, --help\n"
+                      << "  \n"
+                      << "  Full backup:\n"
+                      << "  After running, select 1 to perform a full backup. The generated meta file is in the source_directory (you can choose to delete [only perform a full backup next time]) \n"
+                      << "  \n"
+                      << "  Incremental backup:\n"
+                      << "  When performing an incremental backup for the first time, please confirm that the destination_directory exists and is empty. After the first incremental backup, a .btd file will be generated in the source_directory. Please do not delete it, otherwise you will not be able to perform an incremental backup next time.\n"
+                      << "  After running, select 2 to perform an incremental backup. The generated meta file is in the source_directory. If the source_directory does not have a meta file, incremental backup cannot be performed. When the meta file is deleted, a full backup will be performed (note that this is very dangerous. If there is backup data in the destination_directory, it will overwrite the entire destination_directory. This operation is irreversible)\n"
+                      << "  \n"
+                      << "  More:\n"
+                      << "  Please visit the code repository to learn more: https://github.com/Evilrabbit520/backup/\n"
+                      << "  \n";
+            args["help"] = "";
+
+        }
+        else if (arg == "-v" || arg == "--version")
+        {
+            // backup version
+            args["version"] = "1.0.1";
+        }
+    }
+    return args;
+}
 
 /**
  * @brief Obtain the time when the file was last modified
@@ -161,9 +210,23 @@ std::vector<std::filesystem::path> getFilesToBackup(
 
 int main(int argc, char *argv[])
 {
-    if (argc != 3)
+    auto args = parse_args(argc, argv);
+    if (argc != 3 || argc < 2)
     {
-        std::cerr << "Usage:" << argv[0] << "\"source_directory\" \"destination_directory\"\n";
+        if (args.count("version"))
+        {
+            std::cout << "Version " << args["version"] << std::endl;
+            exit(0);
+        }
+        else if (args.count("help"))
+        {
+            std::cout << "Goodbye~ " << std::endl;
+            exit(0);
+        }
+        std::cerr << "backup usage: backup\n"
+                      <<"                        " << argv[0] << " <source_directory> <destination_directory>\n"
+                      <<"                        [--version | -v | --help | -h]\n";
+                      exit(0);
         return 1;
     }
 
@@ -244,7 +307,8 @@ int main(int argc, char *argv[])
     }
     else
     {
-        std::cout << "The full backup operation cannot be reversed, so make sure that the destination folder is empty or that you are sure to overwrite it." << std::endl;;
+        std::cout << "The full backup operation cannot be reversed, so make sure that the destination folder is empty or that you are sure to overwrite it." << std::endl;
+        ;
         std::cout << "Are you sure? (sure / not sure)" << std::endl;
         std::cin >> arr;
         if (arr != "sure")
