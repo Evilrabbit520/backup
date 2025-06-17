@@ -265,25 +265,35 @@ void BackupManager::performBackup()
 
         std::filesystem::create_directories(destFile.parent_path());
 
-        if (std::filesystem::is_regular_file(file))
+        try
         {
-            uintmax_t fileSize = std::filesystem::file_size(file);
-            std::filesystem::copy_file(file, destFile, std::filesystem::copy_options::overwrite_existing);
-            copiedSize += fileSize;
-        }
-        else if (std::filesystem::is_directory(file))
-        {
-            for (const auto &entry : std::filesystem::recursive_directory_iterator(file))
+            if (std::filesystem::is_regular_file(file))
             {
-                if (entry.is_regular_file())
+                uintmax_t fileSize = std::filesystem::file_size(file);
+                std::filesystem::copy_file(file, destFile, std::filesystem::copy_options::overwrite_existing);
+                copiedSize += fileSize;
+            }
+            else if (std::filesystem::is_directory(file))
+            {
+                for (const auto &entry : std::filesystem::recursive_directory_iterator(file))
                 {
-                    std::filesystem::path relEntryPath = std::filesystem::relative(entry.path(), sourceDir);
-                    std::filesystem::path destEntryPath = backupDir / relEntryPath;
-                    std::filesystem::create_directories(destEntryPath.parent_path());
-                    std::filesystem::copy_file(entry.path(), destEntryPath, std::filesystem::copy_options::overwrite_existing);
-                    copiedSize += entry.file_size();
+                    if (entry.is_regular_file())
+                    {
+                        std::filesystem::path relEntryPath = std::filesystem::relative(entry.path(), sourceDir);
+                        std::filesystem::path destEntryPath = backupDir / relEntryPath;
+                        std::filesystem::create_directories(destEntryPath.parent_path());
+                        std::filesystem::copy_file(entry.path(), destEntryPath, std::filesystem::copy_options::overwrite_existing);
+                        copiedSize += entry.file_size();
+                    }
                 }
             }
+        }
+        catch (const std::filesystem::filesystem_error &e)
+        {
+            std::cerr << "Insufficient permissions to complete the copy: Try using administrator privileges." << "\n";
+            std::cerr << "[Replication failed]: " << e.what() << "\n";
+            std::cerr << "Source path: " << e.path1() << "\n";
+            std::cerr << "Destination path: " << e.path2() << "\n";
         }
 
         tool.showCopyProgress(copiedSize, totalSize);
