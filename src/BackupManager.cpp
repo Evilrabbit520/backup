@@ -158,7 +158,7 @@ bool BackupManager::prepareBackupFiles()
 /**
  * @brief Gets a list of files that need to be backed up (incremental backups), including some operations
  * @details Try to calculate the file modification time first, and then calculate SHA256 if it is inconsistent.
- * 
+ *
  * @param metadataFile
  * @return std::vector<std::filesystem::path>
  */
@@ -188,7 +188,7 @@ std::vector<std::filesystem::path> BackupManager::getFilesToBackup(const std::fi
                     FilesCount++;
                     files.push_back(entry.path());
                 }
-                
+
                 // Both the source directory and the target directory (i.e., the meta file also contains)
                 if (std::filesystem::exists(sourceDir) && backupData["location"][0]["listFiles"].contains(relativePath.string()))
                 {
@@ -252,18 +252,57 @@ bool BackupManager::confirmBackup()
  */
 void BackupManager::performBackup()
 {
-    // Perform backups (maintain directory structure)
+    uintmax_t totalSize = tool.calculateFileListSize(filesToBackup);
+    uintmax_t copiedSize = 0;
+
+    std::cout << "Start the backup with a total size of: " << totalSize / 1024 << " KB" << std::endl;
+    auto startTime = std::chrono::steady_clock::now();
+
     for (const auto &file : filesToBackup)
     {
         std::filesystem::path relativePath = std::filesystem::relative(file, sourceDir);
         std::filesystem::path destFile = backupDir / relativePath;
 
-        // Make sure that the target directory exists
         std::filesystem::create_directories(destFile.parent_path());
 
-        std::filesystem::copy_file(file, destFile, std::filesystem::copy_options::overwrite_existing);
-        std::cout << "Backed up: " << relativePath << "\n";
+        try
+        {
+            if (std::filesystem::is_regular_file(file))
+            {
+                uintmax_t fileSize = std::filesystem::file_size(file);
+                std::filesystem::copy_file(file, destFile, std::filesystem::copy_options::overwrite_existing);
+                copiedSize += fileSize;
+            }
+            else if (std::filesystem::is_directory(file))
+            {
+                for (const auto &entry : std::filesystem::recursive_directory_iterator(file))
+                {
+                    if (entry.is_regular_file())
+                    {
+                        std::filesystem::path relEntryPath = std::filesystem::relative(entry.path(), sourceDir);
+                        std::filesystem::path destEntryPath = backupDir / relEntryPath;
+                        std::filesystem::create_directories(destEntryPath.parent_path());
+                        std::filesystem::copy_file(entry.path(), destEntryPath, std::filesystem::copy_options::overwrite_existing);
+                        copiedSize += entry.file_size();
+                    }
+                }
+            }
+        }
+        catch (const std::filesystem::filesystem_error &e)
+        {
+            std::cerr << "Insufficient permissions to complete the copy: Try using administrator privileges." << "\n";
+            std::cerr << "[Replication failed]: " << e.what() << "\n";
+            std::cerr << "Source path: " << e.path1() << "\n";
+            std::cerr << "Destination path: " << e.path2() << "\n";
+        }
+
+        tool.showCopyProgress(copiedSize, totalSize);
     }
+
+    auto endTime = std::chrono::steady_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime);
+    std::cout << std::endl
+              << "Backup complete! It takes: " << duration.count() / 1000.0 << " Seconds." << std::endl;
 }
 
 /**

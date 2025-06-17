@@ -21,7 +21,7 @@ std::unordered_map<std::string, std::string> Parameter::parseArgs(int argc, char
         }
         else if (arg == "-v" || arg == "--version")
         {
-            args["version"] = "1.1.0";
+            args["version"] = "1.2.1";
         }
     }
     return args;
